@@ -35,8 +35,17 @@ export async function ensureBot(token, defaults) {
   const doc = {
     token,
     adminId: String(defaults.adminId),
-    channelUsername: defaults.channelUsername || "",
+    // the channel where join requests come in (informational / display only —
+    // the actual chat is always read from the join-request update itself)
+    mainChannelUsername: defaults.mainChannelUsername || "",
+    // the (possibly different) channel a message gets forwarded FROM
+    forwardChannelUsername: defaults.forwardChannelUsername || "",
     forwardMessageId: defaults.forwardMessageId || null,
+    // { chatId, messageId } of a message the admin sent the bot — copied
+    // as-is to new users so text formatting / premium emoji / media survive
+    welcomeMessageRef: defaults.welcomeMessageRef || null,
+    // same idea, but shown to anyone who /start's the bot directly (not via join request)
+    startMessageRef: defaults.startMessageRef || null,
     button1: defaults.button1 || null, // { text, url }
     button2: defaults.button2 || null,
     createdAt: new Date()
