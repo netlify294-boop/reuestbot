@@ -57,22 +57,31 @@ async function setWebhook(token) {
   return result;
 }
 
-// ---------- fixed buttons (shown under welcome AND broadcast messages) ----------
-function buildFixedKeyboard(botConfig) {
+// ---------- fixed persistent keyboard (stays at bottom of chat, not attached to a message) ----------
+function buildReplyKeyboard(botConfig) {
   const row = [];
-  if (botConfig.button1 && botConfig.button1.text && botConfig.button1.url) {
-    row.push({ text: botConfig.button1.text, url: botConfig.button1.url });
-  }
-  if (botConfig.button2 && botConfig.button2.text && botConfig.button2.url) {
-    row.push({ text: botConfig.button2.text, url: botConfig.button2.url });
-  }
+  if (botConfig.button1 && botConfig.button1.text) row.push({ text: botConfig.button1.text });
+  if (botConfig.button2 && botConfig.button2.text) row.push({ text: botConfig.button2.text });
   if (row.length === 0) return undefined;
-  return { inline_keyboard: [row] };
+  return {
+    keyboard: [row],
+    resize_keyboard: true,
+    is_persistent: true
+  };
+}
+
+// when a user taps one of the fixed keyboard buttons, Telegram sends its
+// label back as a plain text message — reply with an inline link button,
+// since only inline buttons can actually open a URL
+function matchConfiguredButton(botConfig, text) {
+  if (botConfig.button1 && botConfig.button1.text === text) return botConfig.button1;
+  if (botConfig.button2 && botConfig.button2.text === text) return botConfig.button2;
+  return null;
 }
 
 // ---------- send the welcome message (any content type, formatting/premium emoji intact) ----------
 async function sendWelcome(token, userId, botConfig) {
-  const keyboard = buildFixedKeyboard(botConfig);
+  const keyboard = buildReplyKeyboard(botConfig);
 
   if (botConfig.welcomeMessageRef) {
     // copyMessage reproduces the original message exactly — text formatting,
@@ -98,7 +107,7 @@ async function sendWelcome(token, userId, botConfig) {
 // ---------- broadcast: copies whatever message the admin sent (text/photo/video/forwarded/etc.) ----------
 async function broadcastCopy(token, fromChatId, messageId, botConfig) {
   const users = await getUsers(token);
-  const keyboard = buildFixedKeyboard(botConfig);
+  const keyboard = buildReplyKeyboard(botConfig);
   let sent = 0;
   let failed = 0;
 
@@ -127,7 +136,7 @@ async function broadcastCopy(token, fromChatId, messageId, botConfig) {
 
 // ---------- send the /start message shown to regular (non-admin) users ----------
 async function sendStartMessage(token, userId, botConfig) {
-  const keyboard = buildFixedKeyboard(botConfig);
+  const keyboard = buildReplyKeyboard(botConfig);
 
   if (botConfig.startMessageRef) {
     const result = await tgApi(token, "copyMessage", {
@@ -349,6 +358,17 @@ app.post("/webhook/:token", async (req, res) => {
           }
         }
 
+        return res.send("OK");
+      }
+
+      // a tap on the fixed bottom keyboard arrives as plain text matching its label
+      const tappedButton = text ? matchConfiguredButton(botConfig, text) : null;
+      if (tappedButton) {
+        await tgApi(token, "sendMessage", {
+          chat_id: fromId,
+          text: tappedButton.text,
+          reply_markup: { inline_keyboard: [[{ text: "Open", url: tappedButton.url }]] }
+        });
         return res.send("OK");
       }
 
